@@ -58,7 +58,10 @@ func Worker(mapf func(string, string) []KeyValue,
 		if !ok {
 			log.Fatalf("Sync intermediate failed")
 		}
-	}
+	//case ToReduce:
+	//	partition := reply.reduceTasks.partition
+	//
+	//}
 }
 
 
