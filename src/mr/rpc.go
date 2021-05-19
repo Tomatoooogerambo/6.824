@@ -24,6 +24,38 @@ type ExampleReply struct {
 
 // Add your RPC definitions here.
 
+// define the task type
+type TaskType int32
+const (
+	ToMap	TaskType = 1
+	ToReduce	TaskType = 2
+	Wait		TaskType = 3
+	Done		TaskType = 4
+)
+
+// Map task
+type MapTask struct {
+	fileNmae 	string
+}
+
+// Reduce task
+type ReduceTask struct {
+	partition 	[]KeyValue
+	index 		int
+
+}
+
+// define the message in rpc req
+// ask coordiantor
+type ArgsToTask struct {
+
+}
+
+type TaskForReply struct {
+	taskType 	TaskType
+	mapTasks 	MapTask
+	reduceTasks ReduceTask
+}
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.

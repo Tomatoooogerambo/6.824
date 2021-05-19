@@ -1,6 +1,10 @@
 package mr
 
-import "fmt"
+import (
+	"fmt"
+	"io"
+	"os"
+)
 import "log"
 import "net/rpc"
 import "hash/fnv"
@@ -32,10 +36,37 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
+	args := ArgsToTask{}
+	reply := TaskForReply{}
+	call("Coordinator.DeliverTask", &args, &reply)
+	// checke the task type and  do the work
+	switch reply.taskType {
+	case ToMap:
+		fileName := reply.mapTasks.fileNmae
+		file, err := os.Open(fileName)
+		if err != nil {
+			log.Fatalf("cannot open %v", fileName)
+		}
 
-	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
+		fileContent, err:= io.ReadAll(file)
+		if err != nil {
+			log.Fatalf("cannot read file #{fileName}")
+		}
+		file.Close()
+		intermediatePairs := mapf(fileName, string(fileContent))
+		ok := CallForSycnIntermediaMemory(intermediatePairs)
+		if !ok {
+			log.Fatalf("Sync intermediate failed")
+		}
+	}
+}
 
+
+// call the coordinator to sync the intermediate memory
+func CallForSycnIntermediaMemory(intermediatePairs []KeyValue) bool {
+	isSync := false
+	call("Coordinator.SyncIntermediate", intermediatePairs, &isSync)
+	return isSync
 }
 
 //
