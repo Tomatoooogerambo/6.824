@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"strconv"
 )
 import "log"
 import "net/rpc"
@@ -17,6 +19,14 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+
+// implement the Sort interface
+// SortKV could sort the slice of the KeyValue in order
+type SortKV []KeyValue
+// for sorting by key.
+func (a SortKV) Len() int           { return len(a) }
+func (a SortKV) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a SortKV) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 //
 // use ihash(key) % NReduce to choose the reduce
@@ -54,21 +64,50 @@ func Worker(mapf func(string, string) []KeyValue,
 		}
 		file.Close()
 		intermediatePairs := mapf(fileName, string(fileContent))
+		// send the map result to the coordinator
 		ok := CallForSycnIntermediaMemory(intermediatePairs)
 		if !ok {
 			log.Fatalf("Sync intermediate failed")
 		}
-	//case ToReduce:
-	//	partition := reply.reduceTasks.partition
-	//
-	//}
+	case ToReduce:
+		partition := reply.reduceTasks.partition
+		fileIndex := reply.reduceTasks.index
+		sort.Sort(SortKV(partition))
+		outPut := "mr-out-" + strconv.Itoa(fileIndex)
+		outFile, _ := os.Open(outPut)
+		//
+		// call Reduce on each distinct key in intermediate[],
+		// and print the result to mr-out- "index" file
+		//
+		i := 0
+		for i < len(partition) {
+			j := i + 1
+			for j < len(partition) && partition[j].Key == partition[i].Key {
+				j++
+			}
+			values := []string{}
+			for k := i; k < j; k++ {
+				values = append(values, partition[k].Value)
+			}
+			output := reducef(partition[i].Key, values)
+
+			// this is the correct format for each line of Reduce output.
+			fmt.Fprintf(outFile, "%v %v\n", partition[i].Key, output)
+
+			i = j
+		}
+		outFile.Close()
+
+		// TODO
+		// Need a channel to transfer the Reduce task done.
+	}
 }
 
 
 // call the coordinator to sync the intermediate memory
 func CallForSycnIntermediaMemory(intermediatePairs []KeyValue) bool {
 	isSync := false
-	call("Coordinator.SyncIntermediate", intermediatePairs, &isSync)
+	call("Coordinator.SyncIntermediate", intermediatePairs, isSync)
 	return isSync
 }
 

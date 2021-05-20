@@ -1,6 +1,9 @@
 package mr
 
-import "log"
+import (
+	"log"
+	"sync"
+)
 import "net"
 import "os"
 import "net/rpc"
@@ -9,12 +12,23 @@ import "net/http"
 
 type Coordinator struct {
 	// Your definitions here.
-
+	intermediatePairs []KeyValue	// the local disk to store the map results
+	localLock sync.Mutex			// need a lock to guarantee the thread safe
+	isMapDone bool 					// flag of map all map tasks
+	isAllDone bool					// flag on all the tasks
 }
 
 // Your code here -- RPC handlers for the worker to call.
 // RPC handle for the Work
 func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
+	return nil
+}
+
+func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync bool) error {
+	c.localLock.Lock()
+	c.intermediatePairs = append(c.intermediatePairs, intermediaPair...)
+	c.localLock.Unlock()
+	isSync = true
 	return nil
 }
 //
