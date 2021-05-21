@@ -46,69 +46,92 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
-	args := ArgsToTask{}
-	reply := TaskForReply{}
-	call("Coordinator.DeliverTask", &args, &reply)
-	// checke the task type and  do the work
-	switch reply.taskType {
-	case ToMap:
-		fileName := reply.mapTasks.fileNmae
-		file, err := os.Open(fileName)
-		if err != nil {
-			log.Fatalf("cannot open %v", fileName)
+	for {
+		args := ArgsToTask{}
+		reply := TaskForReply{}
+		call("Coordinator.DeliverTask", &args, &reply)
+		// checke the task type and  do the work
+		switch reply.taskType {
+		case ToMap:
+			// Map task
+			// get the file and map it
+			DoMapTask(&reply, mapf)
+		case ToReduce:
+			// Reduce Task
+			DoReduceTask(&reply, reducef)
 		}
-
-		fileContent, err:= io.ReadAll(file)
-		if err != nil {
-			log.Fatalf("cannot read file #{fileName}")
-		}
-		file.Close()
-		intermediatePairs := mapf(fileName, string(fileContent))
-		// send the map result to the coordinator
-		ok := CallForSycnIntermediaMemory(intermediatePairs)
-		if !ok {
-			log.Fatalf("Sync intermediate failed")
-		}
-	case ToReduce:
-		partition := reply.reduceTasks.partition
-		fileIndex := reply.reduceTasks.index
-		sort.Sort(SortKV(partition))
-		outPut := "mr-out-" + strconv.Itoa(fileIndex)
-		outFile, _ := os.Open(outPut)
-		//
-		// call Reduce on each distinct key in intermediate[],
-		// and print the result to mr-out- "index" file
-		//
-		i := 0
-		for i < len(partition) {
-			j := i + 1
-			for j < len(partition) && partition[j].Key == partition[i].Key {
-				j++
-			}
-			values := []string{}
-			for k := i; k < j; k++ {
-				values = append(values, partition[k].Value)
-			}
-			output := reducef(partition[i].Key, values)
-
-			// this is the correct format for each line of Reduce output.
-			fmt.Fprintf(outFile, "%v %v\n", partition[i].Key, output)
-
-			i = j
-		}
-		outFile.Close()
-
-		// TODO
-		// Need a channel to transfer the Reduce task done.
 	}
 }
 
+// do the map task
+func DoMapTask(reply *TaskForReply, mapTask func(string, string) []KeyValue) {
+	fileName := reply.mapTasks.fileNmae
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatalf("cannot open %v", fileName)
+	}
+
+	fileContent, err := io.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read file #{fileName}")
+	}
+	file.Close()
+	intermediatePairs := mapTask(fileName, string(fileContent))
+	// send the map result to the coordinator
+	// return the partition to the coordinator to sync the local storage
+	ok := CallForSyncIntermediaMemory(intermediatePairs)
+	if !ok {
+		log.Fatalf("Sync intermediate failed")
+	}
+}
+
+// do the reduce task
+func DoReduceTask(reply *TaskForReply, reduceTask func(string, []string) string) {
+	partition := reply.reduceTasks.partition
+	fileIndex := reply.reduceTasks.index
+	sort.Sort(SortKV(partition))
+	outPut := "mr-out-" + strconv.Itoa(fileIndex)
+	outFile, _ := os.Open(outPut)
+	//
+	// call Reduce on each distinct key in intermediate[],
+	// and print the result to mr-out- "index" file
+	//
+	i := 0
+	for i < len(partition) {
+		j := i + 1
+		for j < len(partition) && partition[j].Key == partition[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, partition[k].Value)
+		}
+		output := reduceTask(partition[i].Key, values)
+
+		// this is the correct format for each line of Reduce output.
+		fmt.Fprintf(outFile, "%v %v\n", partition[i].Key, output)
+
+		i = j
+	}
+	outFile.Close()
+	ok :=  CallForSyncPartitionIndex(&fileIndex)
+	if !ok {
+		log.Fatalf("Sync intermediate failed")
+	}
+}
 
 // call the coordinator to sync the intermediate memory
-func CallForSycnIntermediaMemory(intermediatePairs []KeyValue) bool {
+func CallForSyncIntermediaMemory(intermediatePairs []KeyValue) bool {
 	isSync := false
-	call("Coordinator.SyncIntermediate", intermediatePairs, isSync)
+	call("Coordinator.SyncIntermediate", intermediatePairs, &isSync)
 	return isSync
+}
+
+// call the coordinator to sync the index of the partition
+func CallForSyncPartitionIndex(index *int) bool {
+	isOk := false
+	call("Coordinator.SyncPartitionIndex", &index, &isOk)
+	return isOk
 }
 
 //

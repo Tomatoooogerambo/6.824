@@ -24,11 +24,11 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 	return nil
 }
 
-func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync bool) error {
+func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync *bool) error {
 	c.localLock.Lock()
 	c.intermediatePairs = append(c.intermediatePairs, intermediaPair...)
 	c.localLock.Unlock()
-	isSync = true
+	*isSync = true
 	return nil
 }
 //
