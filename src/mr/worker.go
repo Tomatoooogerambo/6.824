@@ -130,7 +130,7 @@ func CallForSyncIntermediaMemory(intermediatePairs []KeyValue) bool {
 // call the coordinator to sync the index of the partition
 func CallForSyncPartitionIndex(index *int) bool {
 	isOk := false
-	call("Coordinator.SyncPartitionIndex", &index, &isOk)
+	call("Coordinator. SyncPartitionIndex", &index, &isOk)
 	return isOk
 }
 

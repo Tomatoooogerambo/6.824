@@ -53,8 +53,8 @@ type ArgsToTask struct {
 
 type TaskForReply struct {
 	taskType 	TaskType
-	mapTasks 	MapTask
-	reduceTasks ReduceTask
+	mapTasks 	*MapTask
+	reduceTasks *ReduceTask
 }
 
 // Cook up a unique-ish UNIX-domain socket name
