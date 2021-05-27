@@ -9,6 +9,11 @@ import "os"
 import "net/rpc"
 import "net/http"
 
+// this is the sync vars for the local variables
+type partitionInfo struct {
+	index int 			// partition index
+	allLength int
+}
 
 type Coordinator struct {
 	// Your definitions here.
@@ -16,7 +21,8 @@ type Coordinator struct {
 	fileIndex int					// the index of the files
 	intermediatePairs []KeyValue	// the local disk to store the map results
 	localLock sync.Mutex			// need a lock to guarantee the thread safe
-	partitionIndex int 				// index to the partition
+	parInfo *partitionInfo			// control the access of the reducePartition
+	isPartitionInitialized bool
 	reducePartition [][]KeyValue		//
 	isMapDone bool 					// flag of map all map tasks
 	isAllDone bool					// flag on all the tasks
@@ -40,14 +46,29 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 		reply.mapTasks = mapTask
 		return  nil
 	}else {
+		// make sure the partition only initionalized once
+		if !c.isPartitionInitialized {
+			reduces := len(c.reducePartition)
+			gapLength := len(c.intermediatePairs) /reduces
+			for i := 0; i < reduces; i++ {
+				if i == reduces -1 {
+					c.reducePartition[i]  = c.intermediatePairs[10*i:]
+				}else {
+					c.reducePartition[i]  = c.intermediatePairs[10*i:10*i+gapLength]
+				}
+			}
+
+			c.isPartitionInitialized = true
+		}
 		// check reduce tasks done
 		if !c.isAllDone {
 			c.localLock.Lock()
-			partitionIndex := c.partitionIndex
-			c.localLock.Unlock()
-
+			defer c.localLock.Unlock()
+			//c.localLock.Unlock()
+			newIndex := c.parInfo.index
+			c.parInfo.index += 1
 			reduceTask := &ReduceTask{
-				partition: c.reducePartition[partitionIndex],
+				partition: c.reducePartition[newIndex],
 			}
 			reply.taskType = ToReduce
 			reply.reduceTasks = reduceTask
@@ -65,15 +86,22 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync *bool) error {
 	c.localLock.Lock()
 	c.intermediatePairs = append(c.intermediatePairs, intermediaPair...)
+	c.fileIndex += 1
+	if c.fileIndex == len(c.files) {
+		c.isMapDone = true
+	}
 	c.localLock.Unlock()
 	*isSync = true
 	return nil
 }
 
 // sycn the partition for futher task
-func (c *Coordinator) SyncPartitionIndex(index *int, isOk *bool) error {
+func (c *Coordinator) SyncPartitionIndex(args *ArgsToTask,isOk *bool) error {
 	c.localLock.Lock()
-	c.partitionIndex = *index
+	c.parInfo.allLength += 1
+	if c.parInfo.allLength == len(c.reducePartition) {
+		c.isAllDone = true
+	}
 	c.localLock.Unlock()
 	*isOk = true
 	return nil
@@ -134,9 +162,12 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c.intermediatePairs = make([]KeyValue, len(files))
 	c.isMapDone = false
 	c.isAllDone = false
-	c.partitionIndex = 0
 	c.fileIndex = 0
-
+	c.isPartitionInitialized = false
+	c.parInfo = &partitionInfo{
+		index:       0,
+		allLength:   0,
+	}
 	c.server()
 	return &c
 }

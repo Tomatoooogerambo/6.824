@@ -114,7 +114,7 @@ func DoReduceTask(reply *TaskForReply, reduceTask func(string, []string) string)
 		i = j
 	}
 	outFile.Close()
-	ok :=  CallForSyncPartitionIndex(&fileIndex)
+	ok :=  CallForSyncPartition()
 	if !ok {
 		log.Fatalf("Sync intermediate failed")
 	}
@@ -128,9 +128,9 @@ func CallForSyncIntermediaMemory(intermediatePairs []KeyValue) bool {
 }
 
 // call the coordinator to sync the index of the partition
-func CallForSyncPartitionIndex(index *int) bool {
+func CallForSyncPartition() bool {
 	isOk := false
-	call("Coordinator. SyncPartitionIndex", &index, &isOk)
+	call("Coordinator. SyncPartitionIndex", &ArgsToTask{},&isOk)
 	return isOk
 }
 
