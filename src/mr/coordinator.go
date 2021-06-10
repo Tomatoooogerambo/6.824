@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"log"
 	"sync"
 )
@@ -31,22 +32,26 @@ type Coordinator struct {
 // Your code here -- RPC handlers for the worker to call.
 // RPC handle for the Work
 func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
-
+	//fmt.Println("Coordinator: Receive the DeliverTask ask ")
 	// check tasks have been done
 	if !c.isMapDone {
+		//fmt.Println("Coordinator: Receive the Map ask ")
 		c.localLock.Lock()
 		newFileIndex := c.fileIndex
-		c.localLock.Unlock()
+
 
 		mapTask := &MapTask{
-			fileNmae: c.files[newFileIndex],
+			FileNmae: c.files[newFileIndex],
 		}
-
-		reply.taskType = ToMap
-		reply.mapTasks = mapTask
+		c.localLock.Unlock()
+		reply.TaskType = ToMap
+		reply.MapTasks = mapTask
 		return  nil
 	}else {
 		// make sure the partition only initionalized once
+
+
+		c.localLock.Lock()
 		if !c.isPartitionInitialized {
 			reduces := len(c.reducePartition)
 			gapLength := len(c.intermediatePairs) /reduces
@@ -60,21 +65,25 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 
 			c.isPartitionInitialized = true
 		}
+		c.localLock.Unlock()
+
 		// check reduce tasks done
 		if !c.isAllDone {
+			//fmt.Println("Coordinator: Receive the Reduce ask ")
 			c.localLock.Lock()
-			defer c.localLock.Unlock()
 			//c.localLock.Unlock()
 			newIndex := c.parInfo.index
 			c.parInfo.index += 1
 			reduceTask := &ReduceTask{
-				partition: c.reducePartition[newIndex],
+				Partition: c.reducePartition[newIndex],
+				Index: newIndex,
 			}
-			reply.taskType = ToReduce
-			reply.reduceTasks = reduceTask
+			c.localLock.Unlock()
+			reply.TaskType = ToReduce
+			reply.ReduceTasks = reduceTask
 			return nil
 		}else {
-			reply.taskType = Done
+			reply.TaskType = Done
 			return nil
 		}
 
@@ -84,6 +93,7 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 
 // sync the intermediates
 func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync *bool) error {
+	//fmt.Println("Coordinator: Receive the SyncIntermediate ask ")
 	c.localLock.Lock()
 	c.intermediatePairs = append(c.intermediatePairs, intermediaPair...)
 	c.fileIndex += 1
@@ -99,6 +109,8 @@ func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync *bool) 
 func (c *Coordinator) SyncPartitionIndex(args *ArgsToTask,isOk *bool) error {
 	c.localLock.Lock()
 	c.parInfo.allLength += 1
+	//fmt.Printf("allLength: %d", c.parInfo.allLength)
+	//fmt.Printf("reducePartition: %d", len(c.reducePartition))
 	if c.parInfo.allLength == len(c.reducePartition) {
 		c.isAllDone = true
 	}
@@ -141,9 +153,12 @@ func (c *Coordinator) Done() bool {
 	ret := false
 
 	// Your code here.
+	c.localLock.Lock()
 	if c.isAllDone {
+		fmt.Println("Ohhhh, all the task has been done")
 		ret = c.isAllDone
 	}
+	c.localLock.Unlock()
 
 	return ret
 }
@@ -159,7 +174,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	// Your code here.
 	c.reducePartition = make([][]KeyValue, nReduce)
 	c.files = files
-	c.intermediatePairs = make([]KeyValue, len(files))
+	c.intermediatePairs = make([]KeyValue, 0)
 	c.isMapDone = false
 	c.isAllDone = false
 	c.fileIndex = 0
@@ -169,5 +184,6 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 		allLength:   0,
 	}
 	c.server()
+	//fmt.Println("Coordinator: OK, here is the Coordinator working...")
 	return &c
 }

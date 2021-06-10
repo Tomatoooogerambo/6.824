@@ -35,13 +35,13 @@ const (
 
 // Map task
 type MapTask struct {
-	fileNmae 	string
+	FileNmae 	string
 }
 
 // Reduce task
 type ReduceTask struct {
-	partition 	[]KeyValue
-	index 		int
+	Partition 	[]KeyValue
+	Index 		int
 
 }
 
@@ -52,9 +52,9 @@ type ArgsToTask struct {
 }
 
 type TaskForReply struct {
-	taskType 	TaskType
-	mapTasks 	*MapTask
-	reduceTasks *ReduceTask
+	TaskType 	TaskType
+	MapTasks 	*MapTask
+	ReduceTasks *ReduceTask
 }
 
 // Cook up a unique-ish UNIX-domain socket name

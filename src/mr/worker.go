@@ -44,28 +44,34 @@ func ihash(key string) int {
 //
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
-
+	//fmt.Println("Worker: OK, here is the worker working...")
 	// Your worker implementation here.
 	for {
 		args := ArgsToTask{}
 		reply := TaskForReply{}
+		//fmt.Println("Worker: Now worker is going to ask for a task...")
 		call("Coordinator.DeliverTask", &args, &reply)
 		// checke the task type and  do the work
-		switch reply.taskType {
+		switch reply.TaskType {
 		case ToMap:
 			// Map task
 			// get the file and map it
+			//fmt.Printf("Worker: Now worker get the map task: %v \n", reply.MapTasks)
 			DoMapTask(&reply, mapf)
 		case ToReduce:
 			// Reduce Task
+			//fmt.Printf("Worker: Now worker get the reduce task: \n")
 			DoReduceTask(&reply, reducef)
+		case Done:
+			fmt.Printf("Worker: All work is done: \n")
+			return
 		}
 	}
 }
 
 // do the map task
 func DoMapTask(reply *TaskForReply, mapTask func(string, string) []KeyValue) {
-	fileName := reply.mapTasks.fileNmae
+	fileName := reply.MapTasks.FileNmae
 	file, err := os.Open(fileName)
 	if err != nil {
 		log.Fatalf("cannot open %v", fileName)
@@ -87,11 +93,11 @@ func DoMapTask(reply *TaskForReply, mapTask func(string, string) []KeyValue) {
 
 // do the reduce task
 func DoReduceTask(reply *TaskForReply, reduceTask func(string, []string) string) {
-	partition := reply.reduceTasks.partition
-	fileIndex := reply.reduceTasks.index
+	partition := reply.ReduceTasks.Partition
+	fileIndex := reply.ReduceTasks.Index
 	sort.Sort(SortKV(partition))
 	outPut := "mr-out-" + strconv.Itoa(fileIndex)
-	outFile, _ := os.Open(outPut)
+	outFile, _ := os.Create(outPut)
 	//
 	// call Reduce on each distinct key in intermediate[],
 	// and print the result to mr-out- "index" file
@@ -110,7 +116,6 @@ func DoReduceTask(reply *TaskForReply, reduceTask func(string, []string) string)
 
 		// this is the correct format for each line of Reduce output.
 		fmt.Fprintf(outFile, "%v %v\n", partition[i].Key, output)
-
 		i = j
 	}
 	outFile.Close()
@@ -130,7 +135,7 @@ func CallForSyncIntermediaMemory(intermediatePairs []KeyValue) bool {
 // call the coordinator to sync the index of the partition
 func CallForSyncPartition() bool {
 	isOk := false
-	call("Coordinator. SyncPartitionIndex", &ArgsToTask{},&isOk)
+	call("Coordinator.SyncPartitionIndex", &ArgsToTask{},&isOk)
 	return isOk
 }
 
