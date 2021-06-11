@@ -34,24 +34,21 @@ type Coordinator struct {
 func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 	//fmt.Println("Coordinator: Receive the DeliverTask ask ")
 	// check tasks have been done
+	c.localLock.Lock()
+	defer c.localLock.Unlock()
 	if !c.isMapDone {
 		//fmt.Println("Coordinator: Receive the Map ask ")
-		c.localLock.Lock()
 		newFileIndex := c.fileIndex
 
 
 		mapTask := &MapTask{
 			FileNmae: c.files[newFileIndex],
 		}
-		c.localLock.Unlock()
 		reply.TaskType = ToMap
 		reply.MapTasks = mapTask
 		return  nil
 	}else {
 		// make sure the partition only initionalized once
-
-
-		c.localLock.Lock()
 		if !c.isPartitionInitialized {
 			reduces := len(c.reducePartition)
 			gapLength := len(c.intermediatePairs) /reduces
@@ -62,15 +59,12 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 					c.reducePartition[i]  = c.intermediatePairs[10*i:10*i+gapLength]
 				}
 			}
-
 			c.isPartitionInitialized = true
 		}
-		c.localLock.Unlock()
 
 		// check reduce tasks done
 		if !c.isAllDone {
-			//fmt.Println("Coordinator: Receive the Reduce ask ")
-			c.localLock.Lock()
+			fmt.Println("Coordinator: Receive the Reduce ask ")
 			//c.localLock.Unlock()
 			newIndex := c.parInfo.index
 			c.parInfo.index += 1
@@ -78,7 +72,6 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 				Partition: c.reducePartition[newIndex],
 				Index: newIndex,
 			}
-			c.localLock.Unlock()
 			reply.TaskType = ToReduce
 			reply.ReduceTasks = reduceTask
 			return nil
@@ -86,14 +79,13 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 			reply.TaskType = Done
 			return nil
 		}
-
 	}
 	return nil
 }
 
 // sync the intermediates
 func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync *bool) error {
-	//fmt.Println("Coordinator: Receive the SyncIntermediate ask ")
+	fmt.Println("Coordinator: Receive the SyncIntermediate ask ")
 	c.localLock.Lock()
 	c.intermediatePairs = append(c.intermediatePairs, intermediaPair...)
 	c.fileIndex += 1
@@ -109,8 +101,8 @@ func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync *bool) 
 func (c *Coordinator) SyncPartitionIndex(args *ArgsToTask,isOk *bool) error {
 	c.localLock.Lock()
 	c.parInfo.allLength += 1
-	//fmt.Printf("allLength: %d", c.parInfo.allLength)
-	//fmt.Printf("reducePartition: %d", len(c.reducePartition))
+	fmt.Printf("allLength: %d --  ", c.parInfo.allLength)
+	fmt.Printf("reducePartition: %d \n", len(c.reducePartition))
 	if c.parInfo.allLength == len(c.reducePartition) {
 		c.isAllDone = true
 	}
