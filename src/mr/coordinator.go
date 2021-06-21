@@ -34,7 +34,11 @@ type Coordinator struct {
 func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 	//fmt.Println("Coordinator: Receive the DeliverTask ask ")
 	// check tasks have been done
-	if !c.isMapDone {
+	// avoid data race
+	c.localLock.Lock()
+	is_Map_Done := c.isMapDone
+	c.localLock.Unlock()
+	if !is_Map_Done {
 		//fmt.Println("Coordinator: Receive the Map ask ")
 		c.localLock.Lock()
 		newFileIndex := c.fileIndex
@@ -49,7 +53,11 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 		return  nil
 	}else {
 		// make sure the partition only initionalized once
-		if !c.isPartitionInitialized {
+		// avoid data race
+		c.localLock.Lock()
+		is_Partition_Initialized := c.isPartitionInitialized
+		c.localLock.Unlock()
+		if !is_Partition_Initialized {
 			c.localLock.Lock()
 			reduces := len(c.reducePartition)
 			gapLength := len(c.intermediatePairs) /reduces
@@ -65,8 +73,12 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 		}
 
 		// check reduce tasks done
-		if !c.isAllDone {
-			fmt.Println("Coordinator: Receive the Reduce ask ")
+		// avoid data race
+		c.localLock.Lock()
+		is_All_Done := c.isAllDone
+		c.localLock.Unlock()
+		if !is_All_Done {
+			//fmt.Println("Coordinator: Receive the Reduce ask ")
 			//c.localLock.Unlock()
 			c.localLock.Lock()
 			newIndex := c.parInfo.index
@@ -89,7 +101,7 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 
 // sync the intermediates
 func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync *bool) error {
-	fmt.Println("Coordinator: Receive the SyncIntermediate ask ")
+	//fmt.Println("Coordinator: Receive the SyncIntermediate ask ")
 	c.localLock.Lock()
 	c.intermediatePairs = append(c.intermediatePairs, intermediaPair...)
 	c.fileIndex += 1
@@ -105,8 +117,8 @@ func (c *Coordinator) SyncIntermediate(intermediaPair []KeyValue, isSync *bool) 
 func (c *Coordinator) SyncPartitionIndex(args *ArgsToTask,isOk *bool) error {
 	c.localLock.Lock()
 	c.parInfo.allLength += 1
-	fmt.Printf("allLength: %d --  ", c.parInfo.allLength)
-	fmt.Printf("reducePartition: %d \n", len(c.reducePartition))
+	//fmt.Printf("allLength: %d --  ", c.parInfo.allLength)
+	//fmt.Printf("reducePartition: %d \n", len(c.reducePartition))
 	if c.parInfo.allLength == len(c.reducePartition) {
 		c.isAllDone = true
 	}

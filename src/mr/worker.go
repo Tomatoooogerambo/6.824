@@ -63,7 +63,7 @@ func Worker(mapf func(string, string) []KeyValue,
 			//fmt.Printf("Worker: Now worker get the reduce task: \n")
 			DoReduceTask(&reply, reducef)
 		case Done:
-			fmt.Printf("Worker: All work is done: \n")
+			//fmt.Printf("Worker: All work is done: \n")
 			return
 		}
 	}
