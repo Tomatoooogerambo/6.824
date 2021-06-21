@@ -34,44 +34,48 @@ type Coordinator struct {
 func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 	//fmt.Println("Coordinator: Receive the DeliverTask ask ")
 	// check tasks have been done
-	c.localLock.Lock()
-	defer c.localLock.Unlock()
 	if !c.isMapDone {
 		//fmt.Println("Coordinator: Receive the Map ask ")
+		c.localLock.Lock()
 		newFileIndex := c.fileIndex
 
 
 		mapTask := &MapTask{
 			FileNmae: c.files[newFileIndex],
 		}
+		c.localLock.Unlock()
 		reply.TaskType = ToMap
 		reply.MapTasks = mapTask
 		return  nil
 	}else {
 		// make sure the partition only initionalized once
 		if !c.isPartitionInitialized {
+			c.localLock.Lock()
 			reduces := len(c.reducePartition)
 			gapLength := len(c.intermediatePairs) /reduces
 			for i := 0; i < reduces; i++ {
 				if i == reduces -1 {
-					c.reducePartition[i]  = c.intermediatePairs[10*i:]
+					c.reducePartition[i]  = c.intermediatePairs[gapLength*i:]
 				}else {
-					c.reducePartition[i]  = c.intermediatePairs[10*i:10*i+gapLength]
+					c.reducePartition[i]  = c.intermediatePairs[gapLength*i:gapLength*i+gapLength]
 				}
 			}
 			c.isPartitionInitialized = true
+			c.localLock.Unlock()
 		}
 
 		// check reduce tasks done
 		if !c.isAllDone {
 			fmt.Println("Coordinator: Receive the Reduce ask ")
 			//c.localLock.Unlock()
+			c.localLock.Lock()
 			newIndex := c.parInfo.index
 			c.parInfo.index += 1
 			reduceTask := &ReduceTask{
 				Partition: c.reducePartition[newIndex],
 				Index: newIndex,
 			}
+			c.localLock.Unlock()
 			reply.TaskType = ToReduce
 			reply.ReduceTasks = reduceTask
 			return nil
