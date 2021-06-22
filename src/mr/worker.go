@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"time"
 )
 import "log"
 import "net/rpc"
@@ -62,6 +63,8 @@ func Worker(mapf func(string, string) []KeyValue,
 			// Reduce Task
 			//fmt.Printf("Worker: Now worker get the reduce task: \n")
 			DoReduceTask(&reply, reducef)
+		case Wait:
+			time.Sleep(time.Second)
 		case Done:
 			//fmt.Printf("Worker: All work is done: \n")
 			return
