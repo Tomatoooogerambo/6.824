@@ -2,6 +2,7 @@ package mr
 
 import (
 	"fmt"
+	"hash/fnv"
 	"log"
 	"sync"
 )
@@ -28,6 +29,15 @@ type Coordinator struct {
 	reducePartition [][]KeyValue		//
 	isMapDone bool 					// flag of map all map tasks
 	isAllDone bool					// flag on all the tasks
+}
+
+// chooset the KeyValue pair to correspond reduce base on the hash of the key
+//result of  hash(key) % nReduce should be [0, nReduce -1]
+func getReduceId(key string, theReduce int) uint32 {
+	result := fnv.New32a()
+	result.Write([]byte(key))
+
+	return result.Sum32()%10
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -67,13 +77,17 @@ func (c *Coordinator) DeliverTask(args *ArgsToTask, reply *TaskForReply) error {
 		if !c.isPartitionInitialized {
 			//c.localLock.Lock()
 			reduces := len(c.reducePartition)
-			gapLength := len(c.intermediatePairs) /reduces
-			for i := 0; i < reduces; i++ {
-				if i == reduces -1 {
-					c.reducePartition[i]  = c.intermediatePairs[gapLength*i:]
-				}else {
-					c.reducePartition[i]  = c.intermediatePairs[gapLength*i:gapLength*i+gapLength]
-				}
+			//gapLength := len(c.intermediatePairs) /reduces
+			//for i := 0; i < reduces; i++ {
+			//	if i == reduces -1 {
+			//		c.reducePartition[i]  = c.intermediatePairs[gapLength*i:]
+			//	}else {
+			//		c.reducePartition[i]  = c.intermediatePairs[gapLength*i:gapLength*i+gapLength]
+			//	}
+			//}
+			for _, kv := range c.intermediatePairs {
+				positionId := getReduceId(kv.Key,reduces)
+				c.reducePartition[positionId] = append(c.reducePartition[positionId], kv)
 			}
 			c.isPartitionInitialized = true
 			//c.localLock.Unlock()
