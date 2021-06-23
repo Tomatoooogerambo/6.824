@@ -67,7 +67,8 @@ func Worker(mapf func(string, string) []KeyValue,
 			time.Sleep(time.Second)
 		case Done:
 			//fmt.Printf("Worker: All work is done: \n")
-			return
+			//return
+			break
 		}
 	}
 }
